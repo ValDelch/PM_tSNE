@@ -28,10 +28,6 @@ Detailled structure
 │       ├── def __init__
 │       └── def fit_transform
 │
-├── _kNN
-│   ├── ...
-│   └── ...
-│
 └── _perform_GD
     ├── ...
     ├── ...
@@ -49,15 +45,17 @@ last modification: 04 September 2020
 
 
 import numpy as np
-from scipy.sparse import csr_matrix
 import cython
-import _kNN
+from sklearn.neighbors import NearestNeighbors
+from scipy.sparse import csr_matrix
+import _utils
+import time
 
 
 MACHINE_EPSILON = np.finfo(np.double).eps
 
 
-def _joint_probabilities_nn(distances, desired_perplexity):
+def joint_probabilities_nn(distances, desired_perplexity):
     """
     Compute joint probabilities p_ij from distances using just nearest
     neighbors.
@@ -156,9 +154,26 @@ class PM_tSNE:
 
         k = min(n_instances - 1, np.int(self.k_factor * self.perplexity + 1))
         
-        if self.exact_nn:
-            distances_nn = _kNN.getExactDistances(X, k)
+        if (self.exact_nn):
+            knn = NearestNeighbors(algorithm='auto', n_neighbors=k, metric='euclidean')
+            knn.fit(X)
+            distances_nn = knn.kneighbors_graph(mode='distance')
+            del knn
         else:
-            distances_nn = _kNN.getApproxDistances(X, k)
+            neighbors = np.empty((n_instances, k+1), dtype=np.int)
+            distances = np.empty((n_instances, k+1), dtype=np.float)
+            
+            t = annoy.AnnoyIndex(initial_dims, 'euclidean')
+            for i, x in enumerate(X):
+                t.add_item(i, x.tolist())
+            t.build(self.n_trees)
+            
+            for i, x in enumerate(X):
+                neighbors[i], distances[i] = t.get_nns_by_vector(x.tolist(), k+1, include_distances=True)
+            del t
+            
+            indptr = np.arange(0, n_instances * (k+1) + 1, k+1)
+            distances_nn = csr_matrix((distances.ravel(), neighbors.ravel(), indptr), shape=(n_instances, n_instances))
+            del indptr ; del neighbors ; del distances
 
         data, indices, indptr = joint_probabilities_nn(distances_nn, self.perplexity)
