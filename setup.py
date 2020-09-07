@@ -9,6 +9,10 @@ setup(
         Extension('_utils',
                   sources=['_utils.pyx'],
                   extra_compile_args=['-O3'],
+                  language='c++'),
+        Extension('_perform_GD',
+                  sources=['_perform_GD.pyx'],
+                  extra_compile_args=['-O3'],
                   language='c++')
         ],
     include_dirs=[np.get_include()],

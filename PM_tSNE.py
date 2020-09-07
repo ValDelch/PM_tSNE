@@ -39,7 +39,7 @@ Detailled structure
 ---
            Author: Delchevalerie Valentin
             email: valentin.delchevalerie@unamur.be
-last modification: 04 September 2020
+last modification: 07 September 2020
 ---
 """
 
@@ -47,8 +47,10 @@ last modification: 04 September 2020
 import numpy as np
 import cython
 from sklearn.neighbors import NearestNeighbors
+import annoy
 from scipy.sparse import csr_matrix
 import _utils
+import _perform_GD2
 import time
 
 
@@ -84,7 +86,8 @@ def joint_probabilities_nn(distances, desired_perplexity):
     conditional_P = _utils._binary_search_perplexity(distances_data, desired_perplexity, verbose=0)
     
     # Symmetrize the joint probability matrix using sparse operations
-    P = csr_matrix((conditional_P.ravel(), distances.indices, distances.indptr), shape=(n_instances, n_instances))
+    P = csr_matrix((conditional_P.ravel(), distances.indices, distances.indptr), shape=(n_instances, 
+                                                                                        n_instances))
     P = P + P.T
     
     # Normalize the joint probability matrix
@@ -131,6 +134,21 @@ class PM_tSNE:
 
 
     def fit_transform(self, X):
+        """
+        Compute the embedding
+
+        ----------
+        Parameters
+        ----------
+        * X : 
+            High dimensional data with shape (n_instances, n_features).
+            
+        -------
+        Returns
+        -------
+        * Y : 
+            Embedding.
+        """
         
         X = np.asarray(X)
         n_instances = X.shape[0]
@@ -158,22 +176,29 @@ class PM_tSNE:
             knn = NearestNeighbors(algorithm='auto', n_neighbors=k, metric='euclidean')
             knn.fit(X)
             distances_nn = knn.kneighbors_graph(mode='distance')
-            del knn
+            del knn ; del X
         else:
             neighbors = np.empty((n_instances, k+1), dtype=np.int)
             distances = np.empty((n_instances, k+1), dtype=np.float)
             
             t = annoy.AnnoyIndex(initial_dims, 'euclidean')
-            for i, x in enumerate(X):
-                t.add_item(i, x.tolist())
+            for i in range(n_instances):
+                t.add_item(i, X[i,:].tolist())
             t.build(self.n_trees)
             
-            for i, x in enumerate(X):
-                neighbors[i], distances[i] = t.get_nns_by_vector(x.tolist(), k+1, include_distances=True)
-            del t
+            for i in range(n_instances):
+                neighbors[i, :], distances[i, :] = t.get_nns_by_vector(X[i,:].tolist(), k+1, 
+                                                                       include_distances=True)
             
             indptr = np.arange(0, n_instances * (k+1) + 1, k+1)
-            distances_nn = csr_matrix((distances.ravel(), neighbors.ravel(), indptr), shape=(n_instances, n_instances))
-            del indptr ; del neighbors ; del distances
+            distances_nn = csr_matrix((distances.ravel(), neighbors.ravel(), indptr), shape=(n_instances, 
+                                                                                             n_instances))
+            del indptr ; del neighbors ; del distances ; del t ; del X
 
         data, indices, indptr = joint_probabilities_nn(distances_nn, self.perplexity)
+        
+        Y = _perform_GD.gradientDescent(n_instances, self.no_dims, data, indices, indptr, self.coeff, 
+                                        self.grid_meth.encode('utf-8'), self.eta, self.early_ex, self.initial_mom, 
+                                        self.final_mom, self.min_gain, self.stop_early, self.n_iter)
+        
+        return Y
