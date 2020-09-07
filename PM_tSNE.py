@@ -50,7 +50,7 @@ from sklearn.neighbors import NearestNeighbors
 import annoy
 from scipy.sparse import csr_matrix
 import _utils
-import _perform_GD2
+import _perform_GD
 import time
 
 
