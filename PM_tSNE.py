@@ -113,11 +113,10 @@ class PM_tSNE:
     """
     
     
-    def __init__(self, no_dims=2, perplexity=30, coeff=6, grid_meth='NGP', eta=750., early_ex=12., 
+    def __init__(self, perplexity=30, coeff=6, grid_meth='NGP', eta=750., early_ex=12., 
                  initial_mom=0.5, final_mom=0.8, min_gain=0.01, k_factor=3.0, exact_nn=False, 
                  n_trees=20, stop_early=100, n_iter=750):
 
-        self.no_dims = no_dims
         self.perplexity = perplexity
         self.coeff = coeff
         self.grid_meth = grid_meth
@@ -155,9 +154,6 @@ class PM_tSNE:
         initial_dims = X.shape[1]
 
         # Check for invalid parameters
-        if (self.no_dims >= initial_dims) or (self.no_dims == 0):
-            raise ValueError("'no_dims' must be less than the initial dimensionality and greater than zero")
-
         if (self.grid_meth not in ['NGP', 'CIC']):
             raise ValueError("'grid_meth' must be 'NGP' or 'CIC'")
 
@@ -197,8 +193,8 @@ class PM_tSNE:
 
         data, indices, indptr = joint_probabilities_nn(distances_nn, self.perplexity)
         
-        Y = _perform_GD.gradientDescent(n_instances, self.no_dims, data, indices, indptr, self.coeff, 
-                                        self.grid_meth.encode('utf-8'), self.eta, self.early_ex, self.initial_mom, 
-                                        self.final_mom, self.min_gain, self.stop_early, self.n_iter)
+        Y = _perform_GD.gradientDescent(n_instances, data, indices, indptr, self.coeff, self.grid_meth.encode('utf-8'), 
+                                        self.eta, self.early_ex, self.initial_mom, self.final_mom, self.min_gain, 
+                                        self.stop_early, self.n_iter)
         
         return Y
