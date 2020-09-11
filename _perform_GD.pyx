@@ -167,8 +167,7 @@ cdef double[:,:] _compute_Repu_CIC(double[:,:] Y, int M, int n):
         int i
         double boundary = 0.0
         double dx
-        double Z
-        double[:] temp1, temp2, temp3, temp4
+        double Z = 0
         double[:,:] hist = np.zeros((M, M), dtype=DTYPE)
         double[:,:] values
         np.ndarray[np.int_t, ndim=1] idx, idy
@@ -198,32 +197,28 @@ cdef double[:,:] _compute_Repu_CIC(double[:,:] Y, int M, int n):
         if abs(coord[idy[i]] - Y[i,1]) > (dx / 2.0):
                 idy[i] += 1
     
-    temp1 = pow(dx, -2.0) * abs((coord[idx[:]+1] - Y[:,0]) * (coord[idy[:]+1] - Y[:,1]))
-    temp2 = pow(dx, -2.0) * abs((coord[idx[:]] - Y[:,0]) * (coord[idy[:]+1] - Y[:,1]))
-    temp3 = pow(dx, -2.0) * abs((coord[idx[:]+1] - Y[:,0]) * (coord[idy[:]] - Y[:,1]))
-    temp4 = pow(dx, -2.0) * abs((coord[idx[:]] - Y[:,0]) * (coord[idy[:]] - Y[:,1]))
-    
     for i in range(n):
-        hist[idx[i],idy[i]]     += temp1[i]
-        hist[idx[i]+1,idy[i]]   += temp2[i]
-        hist[idx[i],idy[i]+1]   += temp3[i]
-        hist[idx[i]+1,idy[i]+1] += temp4[i]
+        hist[idx[i],idy[i]] += pow(dx, -2.0) * abs((coord[idx[i]+1] - Y[i,0]) * (coord[idy[i]+1] - Y[i,1]))
+        hist[idx[i]+1,idy[i]] += pow(dx, -2.0) * abs((coord[idx[i]] - Y[i,0]) * (coord[idy[i]+1] - Y[i,1]))
+        hist[idx[i],idy[i]+1] += pow(dx, -2.0) * abs((coord[idx[i]+1] - Y[i,0]) * (coord[idy[i]] - Y[i,1]))
+        hist[idx[i]+1,idy[i]+1] += pow(dx, -2.0) * abs((coord[idx[i]] - Y[i,0]) * (coord[idy[i]] - Y[i,1]))
             
     values = _kernel(coord, coord)
     pot = scipy.signal.fftconvolve(hist, values, mode='same')
     grad = np.gradient(pot) / np.float64(dx)
 
-    dY[:,0] = grad[0,idx[:],idy[:]] + ((grad[0,idx[:]+1,idy[:]] - grad[0,idx[:],idy[:]]) / dx) * (Y[:,0] - coord[idx[:]]) + \
-                ((grad[0,idx[:],idy[:]+1] - grad[0,idx[:],idy[:]]) / dx) * (Y[:,1] - coord[idy[:]]) + \
-                ((grad[0,idx[:]+1,idy[:]+1] - grad[0,idx[:],idy[:]]) / (dx**2)) * (Y[:,0] - coord[idx[:]]) * (Y[:,1] - coord[idy[:]])
-    dY[:,1] = grad[1,idx[:],idy[:]] + ((grad[1,idx[:]+1,idy[:]] - grad[1,idx[:],idy[:]]) / dx) * (Y[:,0] - coord[idx[:]]) + \
-                ((grad[1,idx[:],idy[:]+1] - grad[1,idx[:],idy[:]]) / dx) * (Y[:,1] - coord[idy[:]]) + \
-                ((grad[1,idx[:]+1,idy[:]+1] - grad[1,idx[:],idy[:]]) / (dx**2)) * (Y[:,0] - coord[idx[:]]) * (Y[:,1] - coord[idy[:]])
-    Z = np.sum(pot[idx[:],idy[:]] + ((pot[idx[:]+1,idy[:]] - pot[idx[:],idy[:]]) / dx) * (Y[:,0] - coord[idx[:]]) + \
-                ((pot[idx[:],idy[:]+1] - pot[idx[:],idy[:]]) / dx) * (Y[:,1] - coord[idy[:]]) + \
-                ((pot[idx[:]+1,idy[:]+1] - pot[idx[:],idy[:]]) / (dx**2)) * (Y[:,0] - coord[idx[:]]) * (Y[:,1] - coord[idy[:]])) / 2.0
+    for i in range(n):
+        dY[i,0] = grad[0,idx[i],idy[i]] + ((grad[0,idx[i]+1,idy[i]] - grad[0,idx[i],idy[i]]) / dx) * (Y[i,0] - coord[idx[i]]) + \
+                    ((grad[0,idx[i],idy[i]+1] - grad[0,idx[i],idy[i]]) / dx) * (Y[i,1] - coord[idy[i]]) + \
+                    ((grad[0,idx[i]+1,idy[i]+1] - grad[0,idx[i],idy[i]]) / (dx**2)) * (Y[i,0] - coord[idx[i]]) * (Y[i,1] - coord[idy[i]])
+        dY[i,1] = grad[1,idx[i],idy[i]] + ((grad[1,idx[i]+1,idy[i]] - grad[1,idx[i],idy[i]]) / dx) * (Y[i,0] - coord[idx[i]]) + \
+                    ((grad[1,idx[i],idy[i]+1] - grad[1,idx[i],idy[i]]) / dx) * (Y[i,1] - coord[idy[i]]) + \
+                    ((grad[1,idx[i]+1,idy[i]+1] - grad[1,idx[i],idy[i]]) / (dx**2)) * (Y[i,0] - coord[idx[i]]) * (Y[i,1] - coord[idy[i]])
+        Z = Z + (pot[idx[i],idy[i]] + ((pot[idx[i]+1,idy[i]] - pot[idx[i],idy[i]]) / dx) * (Y[i,0] - coord[idx[i]]) + \
+                    ((pot[idx[i],idy[i]+1] - pot[idx[i],idy[i]]) / dx) * (Y[i,1] - coord[idy[i]]) + \
+                    ((pot[idx[i]+1,idy[i]+1] - pot[idx[i],idy[i]]) / (dx**2)) * (Y[i,0] - coord[idx[i]]) * (Y[i,1] - coord[idy[i]]))
     
-    return dY / Z
+    return dY / (Z / 2.0)
 
 
 cdef double[:,:] _gradientDescent(int n, double[:] data, int[:] indices, int[:] indptr, double coeff, 
