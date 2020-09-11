@@ -1,3 +1,4 @@
+# cython: language_level=3
 # cython: boundscheck=False
 # cython: cdivision=True
 # cython: wraparound=False
@@ -13,14 +14,8 @@ More informations in PM_tSNE.py
 
 import numpy as np
 cimport numpy as np
-from libc.math cimport pow, int
-cimport libc.math as math
-
+from libc.math cimport pow, int, abs
 import scipy.signal
-import matplotlib.pyplot as plt
-from pylab import rcParams
-rcParams['figure.figsize'] = 10, 10
-color = np.array(['red','blue','green','orange','black','pink','yellow','brown','purple','grey'])
 
 
 DTYPE = np.double
@@ -109,197 +104,126 @@ cdef double[:,:] _kernel(double[:] x, double[:] y):
     return response
 
 
-cdef double[:] _kernel_2(double[:,:,] z):
-    """
-    This function correspond to the filter function in the convolution product
-    Blabla
-    """
-    
-    cdef:
-        int n = z.shape[0]
-        double[:] response = np.empty(n)
-    
-    for i in range(n):
-        response[i] = 1.0 / (1.0 + (math.pow(z[i,0], 2.0) + math.pow(z[i,1], 2.0)))
-    
-    return response
-
-
 cdef double[:,:] _compute_Repu_NGP(double[:,:] Y, int M, int n):
     """
-    Blabla
+    This function compute the repulsive term using a convolution product
     """
 
     cdef:
-        int i, j, _i, _j
-        double xmax, ymax, xmin, ymin, xy
-        double delta_x, delta_y
-        double Z = 0.0
-        double factor_x, factor_y
-        double[:] coord_x  = np.empty((M), dtype=DTYPE)
-        double[:] coord_y  = np.empty((M), dtype=DTYPE)
-        int[:] idx         = np.empty((n), dtype=DTYPE_int)
-        int[:] idy         = np.empty((n), dtype=DTYPE_int)
-        int[:,:] hist      = np.zeros((M, M), dtype=DTYPE_int)
-        double[:,:] values = np.empty((M,M), dtype=DTYPE)
-        double[:,:] pot    = np.empty((M,M), dtype=DTYPE)
-        double[:,:] dY     = np.empty((n,2), dtype=DTYPE)
+        int i, j
+        double boundary = 0.0
+        double dx
+        double Z
+        int[:,:] hist = np.zeros((M, M), dtype=DTYPE_int)
+        double[:,:] values
+        np.ndarray[np.int_t, ndim=1] idx, idy
+        np.ndarray[np.double_t, ndim=1] coord
+        np.ndarray[np.double_t, ndim=2] pot
+        np.ndarray[np.double_t, ndim=2] dY = np.empty((n, 2), dtype=DTYPE)
+        np.ndarray[np.double_t, ndim=3] grad
+        
+    # Get boundaries and grid's resolution
+    for i in range(n):
+        for j in range(2):
+            if abs(Y[i,j]) > boundary:
+                boundary = abs(Y[i,j])
+                
+    dx = (2.0 * boundary) / (M - 1)
+    boundary = boundary + dx
+    
+    coord = np.linspace(-1.0 * boundary, 1.0 * boundary, M, endpoint=True)
 
-    # Edge of the grid
-    xmax = Y[0,0] ; xmin = Y[0,0]
-    ymax = Y[0,1] ; ymin = Y[0,1]
-    for i in range(1,n):
-        xy = Y[i,0] 
-        if xy < xmin:
-            xmin = xy
-        elif xy > xmax:
-            xmax = xy
+    idx = np.searchsorted(coord[:], Y[:,0], side='left') - 1
+    idy = np.searchsorted(coord[:], Y[:,1], side='left') - 1
+    dx = coord[1] - coord[0]
+    
+    for i in range(n):
+        if abs(coord[idx[i]] - Y[i,0]) > (dx / 2.0):
+                idx[i] += 1
+        if abs(coord[idy[i]] - Y[i,1]) > (dx / 2.0):
+                idy[i] += 1
+    
+    for i in range(n):
+        hist[idx[i],idy[i]] += 1
             
-        xy = Y[i,1]
-        if xy < ymin:
-            ymin = xy
-        elif xy > ymax:
-            ymax = xy
-    
-    delta_x = (xmax - xmin) / (M - 1)
-    xmax = xmax + delta_x ; xmin = xmin - 1.01*delta_x
-    delta_x = (xmax - xmin) / (M - 1)
-    
-    delta_y = (ymax - ymin) / (M - 1)
-    ymax = ymax + delta_y ; ymin = ymin - 1.01*delta_y
-    delta_y = (ymax - ymin) / (M - 1)
-    
-    for i in range(M):
-        coord_x[i] = xmin + delta_x * i
-        coord_y[i] = ymin + delta_y * i
-
-    # Find the closest point of the grid for each instance
-    idx = np.searchsorted(np.asarray(coord_x[:]), np.asarray(Y[:,0]), side='right').astype(DTYPE_int) - 1
-    idy = np.searchsorted(np.asarray(coord_y[:]), np.asarray(Y[:,1]), side='right').astype(DTYPE_int) - 1
-
-    # Make the 2D histogram (density map)
-    for i in range(n):
-        hist[idx[i], idy[i]] += 1
-
-    values = _kernel(coord_x, coord_y)
+    values = _kernel(coord, coord)
     pot = scipy.signal.fftconvolve(hist, values, mode='same')
+    grad = np.gradient(pot) / np.float64(dx)
     
-    for i in range(n):
-        Z = Z + pot[idx[i], idy[i]]
+    Z = np.sum(pot[idx[:], idy[:]]) / 2.0
     
-    factor_x = pow(Z * delta_x, -1.0)
-    factor_y = pow(Z * delta_y, -1.0)
-    for i in range(n):
-        _i = idx[i]
-        _j = idy[i]
-
-        dY[i,0] = (pot[_i+1, _j] - pot[_i-1, _j]) * factor_x
-        dY[i,1] = (pot[_i, _j+1] - pot[_i, _j-1]) * factor_y
-
-    return dY
+    dY[:,0] = grad[0,idx[:],idy[:]]
+    dY[:,1] = grad[1,idx[:],idy[:]]
+    
+    return dY / Z
 
 
-cdef np.ndarray[np.double_t, ndim=2] _compute_Repu_NGP_2(double[:,:] Y, int M, int n):
+cdef double[:,:] _compute_Repu_CIC(double[:,:] Y, int M, int n):
     """
     This function compute the repulsive term using a convolution product
     """
 
     cdef:
         int i
-        double boundary, dx, Z
-        double[:,:] hist, value
-        np.ndarray[np.double_t, ndim=1] coord
+        double boundary = 0.0
+        double dx
+        double Z
+        double[:] temp1, temp2, temp3, temp4
+        double[:,:] hist = np.zeros((M, M), dtype=DTYPE)
+        double[:,:] values
         np.ndarray[np.int_t, ndim=1] idx, idy
+        np.ndarray[np.double_t, ndim=1] coord
         np.ndarray[np.double_t, ndim=2] pot
         np.ndarray[np.double_t, ndim=2] dY = np.zeros((n, 2))
         np.ndarray[np.double_t, ndim=3] grad
         
     # Get boundaries and grid's resolution
-    boundary = np.max(np.abs(Y))
-
-    coord = np.linspace(-1.0 * boundary, 1.0 * boundary, M, endpoint=True)
-        
-    idx = np.searchsorted(coord[:], Y[:,0], side='left')
-    idy = np.searchsorted(coord[:], Y[:,1], side='left')
-    
-    hist = np.zeros((M,M))
-        
     for i in range(n):
-        hist[idx[i],idy[i]] += 1
-        
+        for j in range(2):
+            if abs(Y[i,j]) > boundary:
+                boundary = abs(Y[i,j])
+                
+    dx = (2.0 * boundary) / (M - 1)
+    boundary = boundary + dx
+    
+    coord = np.linspace(-1.0 * boundary, 1.0 * boundary, M, endpoint=True)
+
+    idx = np.searchsorted(coord[:], Y[:,0], side='left') - 1
+    idy = np.searchsorted(coord[:], Y[:,1], side='left') - 1
     dx = coord[1] - coord[0]
+    
+    for i in range(n):
+        if abs(coord[idx[i]] - Y[i,0]) > (dx / 2.0):
+                idx[i] += 1
+        if abs(coord[idy[i]] - Y[i,1]) > (dx / 2.0):
+                idy[i] += 1
+    
+    temp1 = pow(dx, -2.0) * abs((coord[idx[:]+1] - Y[:,0]) * (coord[idy[:]+1] - Y[:,1]))
+    temp2 = pow(dx, -2.0) * abs((coord[idx[:]] - Y[:,0]) * (coord[idy[:]+1] - Y[:,1]))
+    temp3 = pow(dx, -2.0) * abs((coord[idx[:]+1] - Y[:,0]) * (coord[idy[:]] - Y[:,1]))
+    temp4 = pow(dx, -2.0) * abs((coord[idx[:]] - Y[:,0]) * (coord[idy[:]] - Y[:,1]))
+    
+    for i in range(n):
+        hist[idx[i],idy[i]]     += temp1[i]
+        hist[idx[i]+1,idy[i]]   += temp2[i]
+        hist[idx[i],idy[i]+1]   += temp3[i]
+        hist[idx[i]+1,idy[i]+1] += temp4[i]
             
-    # Compute the grid point's coordinates
-    value = np.transpose(np.meshgrid(coord, coord)).reshape(-1, 2)
-    
-    # convolution product
-    value = np.reshape(_kernel_2(value), np.squeeze(hist).shape)
-    
-    pot = scipy.signal.fftconvolve(hist, value, mode='same')
-    
-    # Compute the gradient on the grid
+    values = _kernel(coord, coord)
+    pot = scipy.signal.fftconvolve(hist, values, mode='same')
     grad = np.gradient(pot) / np.float64(dx)
 
-    dY[:,0] = grad[0,idx[:],idy[:]]
-    dY[:,1] = grad[1,idx[:],idy[:]]
-
-    Z = np.sum(pot[idx[:],idy[:]])
+    dY[:,0] = grad[0,idx[:],idy[:]] + ((grad[0,idx[:]+1,idy[:]] - grad[0,idx[:],idy[:]]) / dx) * (Y[:,0] - coord[idx[:]]) + \
+                ((grad[0,idx[:],idy[:]+1] - grad[0,idx[:],idy[:]]) / dx) * (Y[:,1] - coord[idy[:]]) + \
+                ((grad[0,idx[:]+1,idy[:]+1] - grad[0,idx[:],idy[:]]) / (dx**2)) * (Y[:,0] - coord[idx[:]]) * (Y[:,1] - coord[idy[:]])
+    dY[:,1] = grad[1,idx[:],idy[:]] + ((grad[1,idx[:]+1,idy[:]] - grad[1,idx[:],idy[:]]) / dx) * (Y[:,0] - coord[idx[:]]) + \
+                ((grad[1,idx[:],idy[:]+1] - grad[1,idx[:],idy[:]]) / dx) * (Y[:,1] - coord[idy[:]]) + \
+                ((grad[1,idx[:]+1,idy[:]+1] - grad[1,idx[:],idy[:]]) / (dx**2)) * (Y[:,0] - coord[idx[:]]) * (Y[:,1] - coord[idy[:]])
+    Z = np.sum(pot[idx[:],idy[:]] + ((pot[idx[:]+1,idy[:]] - pot[idx[:],idy[:]]) / dx) * (Y[:,0] - coord[idx[:]]) + \
+                ((pot[idx[:],idy[:]+1] - pot[idx[:],idy[:]]) / dx) * (Y[:,1] - coord[idy[:]]) + \
+                ((pot[idx[:]+1,idy[:]+1] - pot[idx[:],idy[:]]) / (dx**2)) * (Y[:,0] - coord[idx[:]]) * (Y[:,1] - coord[idy[:]])) / 2.0
     
-    return dY / (Z / 2.0)
-
-
-cdef double[:,:] _compute_Repu_NGP_3(double[:,:] Y, int M, int n):
-    """
-    This function compute the repulsive term using a convolution product
-    """
-
-    cdef:
-        int i
-        double boundary, dx, Z
-        double[:] coord  = np.empty((M), dtype=DTYPE)
-        np.ndarray[np.double_t, ndim=3] grad
-        int[:] idx         = np.empty((n), dtype=DTYPE_int)
-        int[:] idy         = np.empty((n), dtype=DTYPE_int)
-        int[:,:] hist     = np.zeros((M, M), dtype=DTYPE_int)
-        double[:,:] value = np.empty((M,M), dtype=DTYPE)
-        double[:,:] pot    = np.empty((M,M), dtype=DTYPE)
-        double[:,:] dY     = np.empty((n,2), dtype=DTYPE)
-        
-    # Get boundaries and grid's resolution
-    boundary = np.max(np.abs(Y))
-
-    coord = np.linspace(-1.0 * boundary, 1.0 * boundary, M, endpoint=True)
-        
-    idx = np.searchsorted(coord[:], Y[:,0], side='left').astype(DTYPE_int)
-    idy = np.searchsorted(coord[:], Y[:,1], side='left').astype(DTYPE_int)
-        
-    for i in range(n):
-        hist[idx[i],idy[i]] += 1
-        
-    dx = coord[1] - coord[0]
-            
-    # Compute the grid point's coordinates
-    value = np.transpose(np.meshgrid(coord, coord)).reshape(-1, 2)
-    
-    # convolution product
-    value = np.reshape(_kernel_2(value), np.squeeze(hist).shape)
-    
-    pot = scipy.signal.fftconvolve(hist, value, mode='same')
-    
-    # Compute the gradient on the grid
-    grad = np.gradient(pot) / np.float64(dx)
-
-    for i in range(n):
-        dY[i,0] = grad[0,idx[i],idy[i]]
-        dY[i,1] = grad[1,idx[i],idy[i]]
-
-        Z = Z + pot[idx[i],idy[i]]
-    
-    for i in range(n):
-        dY[i,0] = dY[i,0] / (Z / 2.0)
-        dY[i,1] = dY[i,1] / (Z / 2.0)
-    
-    return dY
+    return dY / Z
 
 
 cdef double[:,:] _gradientDescent(int n, double[:] data, int[:] indices, int[:] indptr, double coeff, 
@@ -333,8 +257,10 @@ cdef double[:,:] _gradientDescent(int n, double[:] data, int[:] indices, int[:] 
             momentum = final_mom
 
         dY_attr = _compute_Attr(Y, data, indices, indptr, n)
-        dY_repu = _compute_Repu_NGP_3(Y, M, n)
-        print(np.abs(np.asarray(_compute_Repu_NGP_2(Y, M, n)) - np.asarray(dY_repu)) / np.asarray(dY_repu) * 100.0)
+        if grid_meth == 'NGP'.encode('utf-8'):
+            dY_repu = _compute_Repu_NGP(Y, M, n)
+        else:
+            dY_repu = _compute_Repu_CIC(Y, M, n)
         for i in range(n):
             dY_tot[i,0] = dY_attr[i,0] + dY_repu[i,0]
             dY_tot[i,1] = dY_attr[i,1] + dY_repu[i,1]
@@ -363,12 +289,6 @@ cdef double[:,:] _gradientDescent(int n, double[:] data, int[:] indices, int[:] 
         if l == stop_early:
             for i in range(data.shape[0]):
                 data[i] = data[i] / early_ex
-        
-        if l % 5 == 0:
-            y = np.load('/home/valentin/ownCloud/Personnel/Memoire/test_PM_2.0/MNIST_labels.npy', allow_pickle=True).astype(np.int)
-            plt.scatter(Y[:,0], Y[:,1], c=color[y[:]], s=3)
-            plt.savefig('./images/Y_'+str(l)+'.png')
-            plt.close('all')
 
     return Y
 
