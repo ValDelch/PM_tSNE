@@ -21,13 +21,13 @@ Check the 'requirements' file to install dependencies.
 * Sklearn 0.23.2
 * Scipy 1.5.2
 
-### Installation :
+### Installation
 
 ```python
 >> python setup.py build_ext --inplace
 ```
 
-### Verification :
+### Verification
 
 If matplotlib is installed, you can try...
 
@@ -37,7 +37,7 @@ If matplotlib is installed, you can try...
 
 ... in order to test the implementation on the 70 000 instances of MNIST.
 
-### Utilisation :
+### Utilisation
 
 ```python
 import PM_tSNE
