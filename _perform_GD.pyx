@@ -2,7 +2,7 @@
 # cython: boundscheck=False
 # cython: cdivision=True
 # cython: wraparound=False
-# cython: profile=True
+# cython: profile=False
 
 
 """
@@ -158,7 +158,7 @@ cdef double[:,:] _compute_Repu_NGP(double[:,:] Y, int M, int n):
     return dY / Z
 
 
-cdef double[:,:] _compute_Repu_CIC(double[:,:] Y, int M, int n):
+cdef np.ndarray[np.double_t, ndim=2] _compute_Repu_CIC(double[:,:] Y, int M, int n):
     """
     This function compute the repulsive term using a convolution product
     """
@@ -167,13 +167,13 @@ cdef double[:,:] _compute_Repu_CIC(double[:,:] Y, int M, int n):
         int i
         double boundary = 0.0
         double dx
-        double Z = 0
+        double Z = 0.0
         double[:,:] hist = np.zeros((M, M), dtype=DTYPE)
         double[:,:] values
         np.ndarray[np.int_t, ndim=1] idx, idy
         np.ndarray[np.double_t, ndim=1] coord
         np.ndarray[np.double_t, ndim=2] pot
-        np.ndarray[np.double_t, ndim=2] dY = np.zeros((n, 2))
+        np.ndarray[np.double_t, ndim=2] dY = np.empty((n, 2), dtype=DTYPE)
         np.ndarray[np.double_t, ndim=3] grad
         
     # Get boundaries and grid's resolution
@@ -207,6 +207,19 @@ cdef double[:,:] _compute_Repu_CIC(double[:,:] Y, int M, int n):
     pot = scipy.signal.fftconvolve(hist, values, mode='same')
     grad = np.gradient(pot) / np.float64(dx)
 
+    #dY[:,0] = grad[0,idx[:],idy[:]] + ((grad[0,idx[:]+1,idy[:]] - grad[0,idx[:],idy[:]]) / dx) * (Y[:,0] - coord[idx[:]]) + \
+                #((grad[0,idx[:],idy[:]+1] - grad[0,idx[:],idy[:]]) / dx) * (Y[:,1] - coord[idy[:]]) + \
+                #((grad[0,idx[:]+1,idy[:]+1] - grad[0,idx[:],idy[:]]) / (dx**2)) * (Y[:,0] - coord[idx[:]]) * (Y[:,1] - coord[idy[:]])
+    #dY[:,1] = grad[1,idx[:],idy[:]] + ((grad[1,idx[:]+1,idy[:]] - grad[1,idx[:],idy[:]]) / dx) * (Y[:,0] - coord[idx[:]]) + \
+                #((grad[1,idx[:],idy[:]+1] - grad[1,idx[:],idy[:]]) / dx) * (Y[:,1] - coord[idy[:]]) + \
+                #((grad[1,idx[:]+1,idy[:]+1] - grad[1,idx[:],idy[:]]) / (dx**2)) * (Y[:,0] - coord[idx[:]]) * (Y[:,1] - coord[idy[:]])
+            
+    #Z = np.sum(pot[idx[:],idy[:]] + ((pot[idx[:]+1,idy[:]] - pot[idx[:],idy[:]]) / dx) * (Y[:,0] - coord[idx[:]]) + \
+                #((pot[idx[:],idy[:]+1] - pot[idx[:],idy[:]]) / dx) * (Y[:,1] - coord[idy[:]]) + \
+                #((pot[idx[:]+1,idy[:]+1] - pot[idx[:],idy[:]]) / (dx**2)) * (Y[:,0] - coord[idx[:]]) * (Y[:,1] - coord[idy[:]])) / 2.0
+    
+    #return dY / Z
+    
     for i in range(n):
         dY[i,0] = grad[0,idx[i],idy[i]] + ((grad[0,idx[i]+1,idy[i]] - grad[0,idx[i],idy[i]]) / dx) * (Y[i,0] - coord[idx[i]]) + \
                     ((grad[0,idx[i],idy[i]+1] - grad[0,idx[i],idy[i]]) / dx) * (Y[i,1] - coord[idy[i]]) + \
