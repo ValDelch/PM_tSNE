@@ -23,7 +23,9 @@ Check the 'requirements' file to install dependencies.
 
 ### Installation :
 
+```python
 >> python setup.py build_ext --inplace
+```
 
 ### Verification :
 
