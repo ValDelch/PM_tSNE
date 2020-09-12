@@ -29,7 +29,7 @@ Check the 'requirements' file to install dependencies.
 
 ### Verification :
 
-If matplotlib is installed in addition to dependencies, you can try...
+If matplotlib is installed, you can try...
 
 ```python
 >> python test_PM.py
@@ -40,9 +40,9 @@ If matplotlib is installed in addition to dependencies, you can try...
 ### Utilisation :
 
 ```python
-import PM\_tSNE
-tsne = PM\_tSNE.PM\_tSNE(n\_iter=750, coeff=8.0, grid\_meth='NGP')
+import PM_tSNE
+tsne = PM_tSNE.PM_tSNE(n_iter=750, coeff=8.0, grid_meth='NGP')
 # Load the 70 000 instances of MNIST (already prepared for t-SNE: standardized + reduced to 50 features with PCA)
-X = np.load('./MNIST_data.npy', allow\_pickle=True)
+X = np.load('./MNIST_data.npy', allow_pickle=True)
 Embedding = tsne.fit_transform(X)
 ```

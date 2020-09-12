@@ -1,6 +1,6 @@
 """
 ---
-This code implement a Particle-Mesh inspired code for t-SNE
+This code implements a Particle-Mesh inspired code for t-SNE
 
 The Particle-Mesh algorithm (PM) is well used in physics to solve
 the N-body problem. It is based on the ability of FFTs to transform
@@ -22,19 +22,22 @@ Check the requirements.txt file for python requirements
 Detailled structure
 
 .
-├── PM_tSNE
+├── PM_tSNE.py
 │   ├── def _joint_probabilities_nn
 │   └── class PM_tSNE
 │       ├── def __init__
 │       └── def fit_transform
 │
-└── _perform_GD
-    ├── cdef _compute_Attr
-    ├── cdef _kernel
-    ├── cdef _compute_Repu_NGP
-    ├── cdef _compute_Repu_CIC
-    ├── cdef _gradientDescent
-    └── cpdef gradientDescent
+├── _perform_GD.pyx
+│   ├── cdef _compute_Attr
+│   ├── cdef _kernel
+│   ├── cdef _compute_Repu_NGP
+│   ├── cdef _compute_Repu_CIC
+│   ├── cdef _gradientDescent
+│   └── cpdef gradientDescent
+│
+└── _utils.pyx
+    └── cpdef _binary_search_perplexity
 ---
 
 ---
