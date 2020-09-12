@@ -29,17 +29,18 @@ Detailled structure
 │       └── def fit_transform
 │
 └── _perform_GD
-    ├── ...
-    ├── ...
-    ├── ...
-    ├── ...
-    └── ...
+    ├── cdef _compute_Attr
+    ├── cdef _kernel
+    ├── cdef _compute_Repu_NGP
+    ├── cdef _compute_Repu_CIC
+    ├── cdef _gradientDescent
+    └── cpdef gradientDescent
 ---
 
 ---
            Author: Delchevalerie Valentin
             email: valentin.delchevalerie@unamur.be
-last modification: 07 September 2020
+last modification: 12 September 2020
 ---
 """
 
@@ -59,7 +60,7 @@ MACHINE_EPSILON = np.finfo(np.double).eps
 
 def joint_probabilities_nn(distances, desired_perplexity):
     """
-    Compute joint probabilities p_ij from distances using just nearest
+    Computes joint probabilities p_ij from distances using just nearest
     neighbors.
 
     ----------
@@ -116,6 +117,57 @@ class PM_tSNE:
     def __init__(self, perplexity=30, coeff=6, grid_meth='NGP', eta=750., early_ex=12., 
                  initial_mom=0.5, final_mom=0.8, min_gain=0.01, k_factor=3.0, exact_nn=False, 
                  n_trees=20, stop_early=100, n_iter=750):
+        """
+        ----------
+        Parameters
+        ----------
+        * perplexity : double
+            Perplexity used for t-SNE.
+        
+        * coeff : double
+            This coefficient is used to define the resolution of the grid as int(pow(2.0, coeff)).
+            
+        * grid_meth : string
+            Interpolation method to use on the grid ['NGP' or 'CIC'].
+            
+        * eta : double
+            Learning rate.
+            
+        * early_ex : double
+            Early exaggeration factor to use.
+            
+        * initial_mom : double
+            Initial momentum to use.
+            
+        * final_mom : double
+            Final momentum to use.
+            
+        * min_gain : double
+            Minimum gain.
+            
+        * k_factor : double
+            Used to determine the number of nearest neighbors to consider w.r.t.
+            k = min(n_instances - 1, np.int(k_factor * perplexity + 1)).
+            
+        * exact_nn : Boolean
+            If True, exact nearest neighbors search is used (not recommanded if n_instances >> 1).
+            If False, approximate nearest neighbors search is used, with the Annoy library.
+            
+        * n_trees : integer
+            Meta-parameters for the approximate nearest neighbors search (Annoy).
+            
+        * stop_early : integer
+            Number of iterations before stopping early exaggeration.
+            
+        * n_iter : integer
+            Number of iterations.
+            
+        -------
+        Returns
+        -------
+        * Y : Array of double, of shape [n_instances, 2]
+            Embedding.
+        """
 
         self.perplexity = perplexity
         self.coeff = coeff
@@ -139,13 +191,13 @@ class PM_tSNE:
         ----------
         Parameters
         ----------
-        * X : 
-            High dimensional data with shape (n_instances, n_features).
+        * X : Array of double, of shape [n_instances, n_features]
+            High dimensional data.
             
         -------
         Returns
         -------
-        * Y : 
+        * Y : Array of double, of shape [n_instances, 2]
             Embedding.
         """
         

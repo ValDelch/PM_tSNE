@@ -6,7 +6,7 @@
 
 
 """
-This part of the code impement the gradient descent used for PM_tSNE.
+This part of the code implements the gradient descent used for PM_tSNE.
 
 More informations in PM_tSNE.py
 """
@@ -28,31 +28,32 @@ ctypedef np.int32_t DTYPE_int_t
 cdef double[:,:] _compute_Attr(double[:,:] Y, double[:] data, int[:] indices,
                                int[:] indptr, int n):
     """
-    This function compute the attractive term with respect to the k nearest neighbors
+    This function computes the attractive term with respect to the k nearest neighbors
     
     ----------
     Parameters
     ----------
-    * Y : 
-        Blabla.
+    * Y : Array of double, of shape [n_instances, 2]
+        Embedding.
         
-    * data :
-        Balbla.
+    * data : Array of double
+        This array contains distances in the high dimensional space. It is provided 
+        by joint_probabilities_nn in PM_tSNE.py
         
-    * indices :
-        Blabla.
+    * indices : Array of integer
+        It is provided by joint_probabilities_nn in PM_tSNE.py
         
-    * indptr :
-        Blabla.
+    * indptr : Array of integer
+        It is provided by joint_probabilities_nn in PM_tSNE.py
         
-    * n :
-        Blabla.
+    * n : integer
+        Number of instances.
         
     -------
     Returns
     -------
-    * dY : 
-        Blabla.
+    * dY : Array of double, of shape [n_instances, 2]
+        Attractive force on each instance.
     """
     
     cdef:
@@ -89,7 +90,22 @@ cdef double[:,:] _compute_Attr(double[:,:] Y, double[:] data, int[:] indices,
 
 cdef double[:,:] _kernel(double[:] x, double[:] y):
     """
-    Blabla
+    Kernel function used in order to compute the repulsive force
+    
+    ----------
+    Parameters
+    ----------
+    * x : Array of double, of shape [M]
+        Particular x-coordinates.
+        
+    * y : Array of double, of shape [M]
+        Particular y-coordinates.
+        
+    -------
+    Returns
+    -------
+    * response : Array of double, of shape [M,M]
+        Response of the filter on the grid defined by x and y.
     """
     
     cdef:
@@ -106,7 +122,25 @@ cdef double[:,:] _kernel(double[:] x, double[:] y):
 
 cdef double[:,:] _compute_Repu_NGP(double[:,:] Y, int M, int n):
     """
-    This function compute the repulsive term using a convolution product
+    This function computes the repulsive term with respect to the NGP method
+    
+    ----------
+    Parameters
+    ----------
+    * Y : Array of double, of shape [n_instances, 2]
+        Embedding.
+
+    * M : integer
+        Resolution of the grid in both x and y direction.        
+        
+    * n : integer
+        Number of instances.
+        
+    -------
+    Returns
+    -------
+    * dY : Array of double, of shape [n_instances, 2]
+        Repulsive force on each instance.
     """
 
     cdef:
@@ -122,7 +156,6 @@ cdef double[:,:] _compute_Repu_NGP(double[:,:] Y, int M, int n):
         np.ndarray[np.double_t, ndim=2] dY = np.empty((n, 2), dtype=DTYPE)
         np.ndarray[np.double_t, ndim=3] grad
         
-    # Get boundaries and grid's resolution
     for i in range(n):
         for j in range(2):
             if abs(Y[i,j]) > boundary:
@@ -160,7 +193,25 @@ cdef double[:,:] _compute_Repu_NGP(double[:,:] Y, int M, int n):
 
 cdef np.ndarray[np.double_t, ndim=2] _compute_Repu_CIC(double[:,:] Y, int M, int n):
     """
-    This function compute the repulsive term using a convolution product
+    This function computes the repulsive term with respect to the CIC method
+    
+    ----------
+    Parameters
+    ----------
+    * Y : Array of double, of shape [n_instances, 2]
+        Embedding.
+
+    * M : integer
+        Resolution of the grid in both x and y direction.        
+        
+    * n : integer
+        Number of instances.
+        
+    -------
+    Returns
+    -------
+    * dY : Array of double, of shape [n_instances, 2]
+        Repulsive force on each instance.
     """
 
     cdef:
@@ -176,7 +227,6 @@ cdef np.ndarray[np.double_t, ndim=2] _compute_Repu_CIC(double[:,:] Y, int M, int
         np.ndarray[np.double_t, ndim=2] dY = np.empty((n, 2), dtype=DTYPE)
         np.ndarray[np.double_t, ndim=3] grad
         
-    # Get boundaries and grid's resolution
     for i in range(n):
         for j in range(2):
             if abs(Y[i,j]) > boundary:
@@ -206,19 +256,6 @@ cdef np.ndarray[np.double_t, ndim=2] _compute_Repu_CIC(double[:,:] Y, int M, int
     values = _kernel(coord, coord)
     pot = scipy.signal.fftconvolve(hist, values, mode='same')
     grad = np.gradient(pot) / np.float64(dx)
-
-    #dY[:,0] = grad[0,idx[:],idy[:]] + ((grad[0,idx[:]+1,idy[:]] - grad[0,idx[:],idy[:]]) / dx) * (Y[:,0] - coord[idx[:]]) + \
-                #((grad[0,idx[:],idy[:]+1] - grad[0,idx[:],idy[:]]) / dx) * (Y[:,1] - coord[idy[:]]) + \
-                #((grad[0,idx[:]+1,idy[:]+1] - grad[0,idx[:],idy[:]]) / (dx**2)) * (Y[:,0] - coord[idx[:]]) * (Y[:,1] - coord[idy[:]])
-    #dY[:,1] = grad[1,idx[:],idy[:]] + ((grad[1,idx[:]+1,idy[:]] - grad[1,idx[:],idy[:]]) / dx) * (Y[:,0] - coord[idx[:]]) + \
-                #((grad[1,idx[:],idy[:]+1] - grad[1,idx[:],idy[:]]) / dx) * (Y[:,1] - coord[idy[:]]) + \
-                #((grad[1,idx[:]+1,idy[:]+1] - grad[1,idx[:],idy[:]]) / (dx**2)) * (Y[:,0] - coord[idx[:]]) * (Y[:,1] - coord[idy[:]])
-            
-    #Z = np.sum(pot[idx[:],idy[:]] + ((pot[idx[:]+1,idy[:]] - pot[idx[:],idy[:]]) / dx) * (Y[:,0] - coord[idx[:]]) + \
-                #((pot[idx[:],idy[:]+1] - pot[idx[:],idy[:]]) / dx) * (Y[:,1] - coord[idy[:]]) + \
-                #((pot[idx[:]+1,idy[:]+1] - pot[idx[:],idy[:]]) / (dx**2)) * (Y[:,0] - coord[idx[:]]) * (Y[:,1] - coord[idy[:]])) / 2.0
-    
-    #return dY / Z
     
     for i in range(n):
         dY[i,0] = grad[0,idx[i],idy[i]] + ((grad[0,idx[i]+1,idy[i]] - grad[0,idx[i],idy[i]]) / dx) * (Y[i,0] - coord[idx[i]]) + \
@@ -238,7 +275,18 @@ cdef double[:,:] _gradientDescent(int n, double[:] data, int[:] indices, int[:] 
                                   char* grid_meth, double eta, double early_ex, double initial_mom, 
                                   double final_mom, double min_gain, int stop_early, int n_iter):
     """
-    Blabla
+    This function performs the gradient descent
+    
+    ----------
+    Parameters
+    ----------
+    Parameters are those given in PM_tSNE.py
+        
+    -------
+    Returns
+    -------
+    * Y : Array of double, of shape [n_instances, 2]
+        Embedding.
     """
 
     cdef:
@@ -305,7 +353,7 @@ cpdef gradientDescent(int n, double[:] data, int[:] indices, int[:] indptr, doub
                       double eta, double early_ex, double initial_mom, double final_mom, double min_gain, 
                       int stop_early, int n_iter):
     """
-    Blabla
+    Wrapper to the cdef function.
     """
     
     return _gradientDescent(n, data, indices, indptr, coeff, grid_meth, eta, early_ex, initial_mom, 
