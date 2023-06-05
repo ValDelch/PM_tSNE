@@ -2,7 +2,7 @@
 
 ### Description
 
-This code implement a Particle-Mesh inspired t-SNE code.
+This code implements a Particle-Mesh inspired t-SNE.
 
 The Particle-Mesh algorithm (PM) is well used in physics to solve
 the N-body problem. It is based on the ability of FFTs to transform
